@@ -4,7 +4,7 @@
 # \__/\_, /___/ .__/
 #    /___/   /_/    
 
-objs = main.o cxa.o
+objs = main.o
 cxx = gcc
 avoid = -Wno-switch
 std = -std=c99
@@ -18,8 +18,7 @@ $(name): $(objs)
 	$(cxx)	-o $(name) $(objs)
 
 %.o: %.c
-	$(cxx)	-c $@ $< $(flags)
+	$(cxx)	-c $< $(flags)
 
 clean:
 	rm	-rf $(objs) *~ $(name)
-
