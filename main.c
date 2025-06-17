@@ -9,6 +9,9 @@
 static char* read_file (const char*, size_t*);
 static void calc_dimens (struct sheet*);
 
+static void breakdown_sheet (struct sheet*);
+static void lex_number (const char*, size_t*, struct token*);
+
 int main (int argc, char **argv)
 {
 	if (argc == 1)
@@ -23,7 +26,13 @@ int main (int argc, char **argv)
 	};
 	calc_dimens(&sheet);
 
-	printf("%d %d\n", sheet.rows, sheet.cols);
+	sheet.grid = (struct cell*) calloc(sheet.rows * sheet.cols, sizeof(*sheet.grid));
+	CHECK_PTR(sheet.grid);
+
+	breakdown_sheet(&sheet);
+
+	free(sheet.src);
+	free(sheet.grid);
 
 	return EXIT_SUCCESS;
 }
@@ -48,7 +57,6 @@ static char* read_file (const char *filename, size_t *length)
 	{
 		errx(EXIT_FAILURE, "only %ld bytes were read out of %ld", read, *length);
 	}
-
 	return src;
 }
 
@@ -72,3 +80,53 @@ static void calc_dimens (struct sheet *sheet)
 	}
 	sheet->cols = (sheet->cols > cols) ? sheet->cols : cols;
 }
+
+static void breakdown_sheet (struct sheet *sheet)
+{
+	unsigned short row = 0;
+	signed short offset = 0;
+
+	struct cell *cc = &sheet->grid[0];
+
+	for (size_t i = 0; i < sheet->length; i++, offset++)
+	{
+		const char this = sheet->src[i];
+
+		if (this == ' ' || this == '\t') { continue; }
+		if (this == '|')                 { cc++; continue; }
+		if (this == '\n')                { cc = &sheet->grid[++row *  sheet->rows]; offset = -1; continue; }
+
+		struct token *T =  &cc->stream[cc->nth_t++];
+		T->context = sheet->src + i;
+		T->numline = row + 1;
+		T->offset  = (unsigned short) offset;
+
+		switch (this)
+		{
+			case '0':
+			case '1':
+			case '2':
+			case '3':
+			case '4':
+			case '5':
+			case '6':
+			case '7':
+			case '8':
+			case '9':
+			{
+				lex_number(sheet->src, &i, T);
+				break;
+			}
+		}
+
+	}
+}
+
+static void lex_number (const char *src, size_t *aka_i, struct token *T)
+{
+	char *ends;
+	T->as.number = strtold(src + *aka_i, &ends);
+
+	printf("%Lf %d at %d\n", T->as.number, T->numline, T->offset);
+}
+

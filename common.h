@@ -12,11 +12,37 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-#define	CHECK_PTR(ptr)	do { if (ptr) break; err(EXIT_FAILURE, "cannot continue"); } while (0)
+#define	CHECK_PTR(ptr)  do { if (ptr) break; err(EXIT_FAILURE, "cannot continue"); } while (0)
+#define MAXTPCELL       128
 
+enum token_kind
+{
+	token_is_number,
+	token_is_string,
+	token_is_reference,
+};
+
+struct token
+{
+	union
+	{
+		long double number;
+	} as;
+	char           *context;
+	unsigned short numline, offset;
+	unsigned short length;
+};
+
+struct cell
+{
+	struct token   stream[MAXTPCELL];
+	char           *src;
+	unsigned short nth_t;
+};
 
 struct sheet
 {
+	struct cell    *grid;
 	char           *src;
 	size_t         length;
 	unsigned short rows, cols;
