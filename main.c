@@ -4,13 +4,10 @@
  * \__/\_, /___/ .__/
  *    /___/   /_/    
  */
-#include <err.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-#define	CHECK_PTR(ptr)	do { if (ptr) break; err(EXIT_FAILURE, "cannot continue"); } while (0)
+#include "common.h"
 
 static char* read_file (const char*, size_t*);
+static void calc_dimens (struct sheet*);
 
 int main (int argc, char **argv)
 {
@@ -19,8 +16,14 @@ int main (int argc, char **argv)
 		errx(EXIT_SUCCESS, "usage: tysp <filename>");
 	}
 
-	size_t length;
-	char *src = read_file(argv[1], &length);
+	struct sheet sheet =
+	{
+		.length = 0,
+		.src = read_file(argv[1], &sheet.length)
+	};
+	calc_dimens(&sheet);
+
+	printf("%d %d\n", sheet.rows, sheet.cols);
 
 	return EXIT_SUCCESS;
 }
@@ -47,4 +50,25 @@ static char* read_file (const char *filename, size_t *length)
 	}
 
 	return src;
+}
+
+static void calc_dimens (struct sheet *sheet)
+{
+	unsigned short cols = 0;
+	bool instr = false;
+
+	for (size_t i = 0; i < sheet->length; i++)
+	{
+		switch (sheet->src[i])
+		{
+			case '"': instr = !instr; break;
+			case '|': if (!instr) cols++; break;
+			case '\n':
+				sheet->rows++;
+				sheet->cols = (sheet->cols > cols) ? sheet->cols : cols;
+				cols = 0;
+				break;
+		}
+	}
+	sheet->cols = (sheet->cols > cols) ? sheet->cols : cols;
 }
