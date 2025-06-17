@@ -6,6 +6,8 @@
  */
 #include "common.h"
 
+ // TODO: improve error handling and usage and stuff u know
+
 static char* read_file (const char*, size_t*);
 static void calc_dimens (struct sheet*);
 
@@ -96,6 +98,11 @@ static void breakdown_sheet (struct sheet *sheet)
 		if (this == '|')                 { cc++; continue; }
 		if (this == '\n')                { cc = &sheet->grid[++row *  sheet->rows]; offset = -1; continue; }
 
+		if (cc->nth_t == MAXTPCELL)
+		{
+			/* TODO: error */
+		}
+
 		struct token *T =  &cc->stream[cc->nth_t++];
 		T->context = sheet->src + i;
 		T->numline = row + 1;
@@ -126,7 +133,7 @@ static void lex_number (const char *src, size_t *aka_i, struct token *T)
 {
 	char *ends;
 	T->as.number = strtold(src + *aka_i, &ends);
+	T->kind = token_is_number;
 
-	printf("%Lf %d at %d\n", T->as.number, T->numline, T->offset);
+	printf("token: <%d>: %Lf on %d at %d\n", T->kind, T->as.number, T->numline, T->offset);
 }
-

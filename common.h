@@ -17,9 +17,9 @@
 
 enum token_kind
 {
-	token_is_number,
-	token_is_string,
-	token_is_reference,
+	token_is_reference = '@',
+	token_is_string    = '"',
+	token_is_number    = 256,
 };
 
 struct token
@@ -28,9 +28,10 @@ struct token
 	{
 		long double number;
 	} as;
-	char           *context;
-	unsigned short numline, offset;
-	unsigned short length;
+	char            *context;
+	unsigned short  numline, offset;
+	unsigned short  length;
+	enum token_kind kind;
 };
 
 struct cell
