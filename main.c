@@ -6,13 +6,13 @@
  */
 #include "common.h"
 
- // TODO: improve error handling and usage and stuff u know
-
 static char* read_file (const char*, size_t*);
 static void calc_dimens (struct sheet*);
 
 static void breakdown_sheet (struct sheet*);
-static void lex_number (const char*, size_t*, struct token*);
+static size_t lex_number (const char*, size_t*, struct token*);
+
+static size_t lex_string (const char*, size_t*, struct token*);
 
 int main (int argc, char **argv)
 {
@@ -100,7 +100,7 @@ static void breakdown_sheet (struct sheet *sheet)
 
 		if (cc->nth_t == MAXTPCELL)
 		{
-			/* TODO: error */
+			errx(EXIT_FAILURE, "token per cell exceeded (%d)\n", MAXTPCELL);
 		}
 
 		struct token *T =  &cc->stream[cc->nth_t++];
@@ -121,19 +121,55 @@ static void breakdown_sheet (struct sheet *sheet)
 			case '8':
 			case '9':
 			{
-				lex_number(sheet->src, &i, T);
+				offset += lex_number(sheet->src, &i, T);
+				T->kind = token_is_number;
 				break;
+			}
+
+			case '"':
+			{
+				offset += lex_string(sheet->src, &i, T);
+				T->kind = token_is_string;
+				break;
+			}
+
+			case '-':
+			{
 			}
 		}
 
 	}
 }
 
-static void lex_number (const char *src, size_t *aka_i, struct token *T)
+static size_t lex_number (const char *src, size_t *aka_i, struct token *T)
 {
 	char *ends;
 	T->as.number = strtold(src + *aka_i, &ends);
 	T->kind = token_is_number;
 
-	printf("token: <%d>: %Lf on %d at %d\n", T->kind, T->as.number, T->numline, T->offset);
+	size_t cut = ends - (src + *aka_i);
+	*aka_i += cut;
+	T->length = cut;
+
+	printf("token: <%d>: %Lf on %d at %d %d\n", T->kind, T->as.number, T->numline, T->offset, T->length);
+	return cut;
+}
+
+static size_t lex_string (const char *src, size_t *aka_i, struct token *T)
+{
+	size_t old = *aka_i;
+
+	*aka_i += 1;
+	T->context++;
+
+	while (src[*aka_i] != '"')
+	{
+		*aka_i += 1;
+		T->length++;
+	}
+
+	printf("token: <%d>: %.*s on %d at %d %d\n", token_is_string, T->length, T->context, T->numline, T->offset, T->length);
+
+	*aka_i += 1;
+	return *aka_i - old;
 }
