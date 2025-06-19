@@ -1,175 +1,88 @@
-/*   __              
- *  / /___ _____ ___ 
- * / __/ // (_-</ _ \
- * \__/\_, /___/ .__/
- *    /___/   /_/    
- */
 #include "common.h"
 
-static char* read_file (const char*, size_t*);
-static void calc_dimens (struct sheet*);
+#define MAX(a, b)    ((a) > (b) ? (a) : (b))
 
-static void breakdown_sheet (struct sheet*);
-static size_t lex_number (const char*, size_t*, struct token*);
+static void usage (void);
+static void read_file (const char*, struct sheet*);
 
-static size_t lex_string (const char*, size_t*, struct token*);
+static void process_sheet (struct sheet*);
 
 int main (int argc, char **argv)
 {
-	if (argc == 1)
-	{
-		errx(EXIT_SUCCESS, "usage: tysp <filename>");
-	}
+	if (argc == 1) { usage(); return 0; }
 
-	struct sheet sheet =
-	{
-		.length = 0,
-		.src = read_file(argv[1], &sheet.length)
-	};
-	calc_dimens(&sheet);
+	struct sheet sheet = {0};
+
+	read_file(argv[1], &sheet);
+	process_sheet(&sheet);
 
 	sheet.grid = (struct cell*) calloc(sheet.rows * sheet.cols, sizeof(*sheet.grid));
 	CHECK_PTR(sheet.grid);
 
-	breakdown_sheet(&sheet);
-
-	free(sheet.src);
-	free(sheet.grid);
-
-	return EXIT_SUCCESS;
+	return 0;
 }
 
-static char* read_file (const char *filename, size_t *length)
+static void usage (void)
 {
+	printf("\n  Usage: tysp <filename>\n");
+	printf("    filename: The name of the file to process.\n\n");
+}
+
+static void read_file (const char *filename, struct sheet *sheet)
+{
+	sheet->filename = (char*) filename;
 	FILE *file = fopen(filename, "r");
+
 	if (!file)
 	{
-		err(EXIT_FAILURE, "cannot open file");
+		fprintf(stderr, "\n  Error: Could not open file '%s'.\n\n", filename);
+		exit(EXIT_FAILURE);
 	}
 
 	fseek(file, 0, SEEK_END);
-	*length = ftell(file);
+	sheet->size = ftell(file);
 	fseek(file, 0, SEEK_SET);
 
-	char *src = (char*) calloc(*length + 1, sizeof(char));
-	CHECK_PTR(src);
+	sheet->source = (char*) calloc(sheet->size + 1, sizeof(*sheet->source));
+	CHECK_PTR(sheet->source);
 
-	const size_t read = fread(src, 1, *length, file);
-	if (read != *length)
+	const size_t read = fread(sheet->source, 1, sheet->size, file);
+	if (read != sheet->size)
 	{
-		errx(EXIT_FAILURE, "only %ld bytes were read out of %ld", read, *length);
+		fprintf(stderr, "\n  Error: Only %ld B out of %ld B were read.\n\n", read, sheet->size);
+		exit(EXIT_FAILURE);
 	}
-	return src;
+
+	fclose(file);
 }
 
-static void calc_dimens (struct sheet *sheet)
+static void process_sheet (struct sheet *sheet)
 {
-	unsigned short cols = 0;
 	bool instr = false;
+	uint16_t cols = 0;
 
-	for (size_t i = 0; i < sheet->length; i++)
+	for (size_t i = 0; i < sheet->size; i++)
 	{
-		switch (sheet->src[i])
+		switch (sheet->source[i])
 		{
-			case '"': instr = !instr; break;
-			case '|': if (!instr) cols++; break;
-			case '\n':
-				sheet->rows++;
-				sheet->cols = (sheet->cols > cols) ? sheet->cols : cols;
-				cols = 0;
-				break;
-		}
-	}
-	sheet->cols = (sheet->cols > cols) ? sheet->cols : cols;
-}
-
-static void breakdown_sheet (struct sheet *sheet)
-{
-	unsigned short row = 0;
-	signed short offset = 0;
-
-	struct cell *cc = &sheet->grid[0];
-
-	for (size_t i = 0; i < sheet->length; i++, offset++)
-	{
-		const char this = sheet->src[i];
-
-		if (this == ' ' || this == '\t') { continue; }
-		if (this == '|')                 { cc++; continue; }
-		if (this == '\n')                { cc = &sheet->grid[++row *  sheet->rows]; offset = -1; continue; }
-
-		if (cc->nth_t == MAXTPCELL)
-		{
-			errx(EXIT_FAILURE, "token per cell exceeded (%d)\n", MAXTPCELL);
-		}
-
-		struct token *T =  &cc->stream[cc->nth_t++];
-		T->context = sheet->src + i;
-		T->numline = row + 1;
-		T->offset  = (unsigned short) offset;
-
-		switch (this)
-		{
-			case '0':
-			case '1':
-			case '2':
-			case '3':
-			case '4':
-			case '5':
-			case '6':
-			case '7':
-			case '8':
-			case '9':
-			{
-				offset += lex_number(sheet->src, &i, T);
-				T->kind = token_is_number;
-				break;
-			}
-
 			case '"':
 			{
-				offset += lex_string(sheet->src, &i, T);
-				T->kind = token_is_string;
+				instr = !instr;
 				break;
 			}
-
-			case '-':
+			case '|':
 			{
+				if (instr == false) cols++;
+				break;
+			}
+			case '\n':
+			{
+				sheet->cols = MAX(sheet->cols, cols);
+				cols = 0;
+				sheet->rows++;
+				break;
 			}
 		}
-
 	}
-}
-
-static size_t lex_number (const char *src, size_t *aka_i, struct token *T)
-{
-	char *ends;
-	T->as.number = strtold(src + *aka_i, &ends);
-	T->kind = token_is_number;
-
-	size_t cut = ends - (src + *aka_i);
-	*aka_i += cut;
-	T->length = cut;
-
-	printf("token: <%d>: %Lf on %d at %d %d\n", T->kind, T->as.number, T->numline, T->offset, T->length);
-	return cut;
-}
-
-static size_t lex_string (const char *src, size_t *aka_i, struct token *T)
-{
-	size_t old = *aka_i;
-
-	*aka_i += 1;
-	T->context++;
-
-	while (src[*aka_i] != '"')
-	{
-		*aka_i += 1;
-		T->length++;
-	}
-
-	printf("token: <%d>: %.*s on %d at %d %d\n", token_is_string, T->length, T->context, T->numline, T->offset, T->length);
-
-	*aka_i += 1;
-	return *aka_i - old;
+	sheet->cols = MAX(sheet->cols, cols);
 }
