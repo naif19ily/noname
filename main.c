@@ -1,4 +1,5 @@
 #include "common.h"
+#include <errno.h>
 
 #define MAX(a, b)    ((a) > (b) ? (a) : (b))
 
@@ -7,6 +8,8 @@ static void read_file (const char*, struct sheet*);
 
 static void get_sheet_dimensions (struct sheet*);
 static void process_content (struct sheet*);
+
+static void process_raw_number (struct token*, size_t*, uint16_t*);
 
 int main (int argc, char **argv)
 {
@@ -122,8 +125,23 @@ static void process_content (struct sheet *sheet)
 			case '8':
 			case '9':
 			{
+				process_raw_number(tht, &i, &offset);
 				break;
 			}
 		}
 	}
+}
+
+static void process_raw_number (struct token *tht, size_t *aka_i, uint16_t *offset)
+{
+	char *ends;
+	tht->as.number = strtold(tht->meta.context, &ends);
+
+	size_t dx = ends - tht->meta.context;
+
+	tht->type = TT_NUMBER;
+	tht->meta.length = dx;
+
+	*aka_i  += dx - 1;
+	*offset += (uint16_t) dx;
 }
