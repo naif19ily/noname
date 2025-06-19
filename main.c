@@ -1,5 +1,6 @@
 #include "common.h"
 #include <errno.h>
+#include <ctype.h>
 
 #define MAX(a, b)    ((a) > (b) ? (a) : (b))
 
@@ -11,6 +12,9 @@ static void process_content (struct sheet*);
 
 static void process_raw_number (struct token*, size_t*, uint16_t*);
 static void process_raw_string (struct token*, size_t*, uint16_t*);
+
+static void process_raw_reference (struct token*, size_t*, uint16_t*, const enum token_type);
+static void validate_reference ();
 
 int main (int argc, char **argv)
 {
@@ -135,6 +139,13 @@ static void process_content (struct sheet *sheet)
 				process_raw_string(tht, &i, &offset);
 				break;
 			}
+
+			case '@':
+			case '$':
+			{
+				process_raw_reference(tht, &i, &offset, (enum token_type) sheet->source[i]);
+				break;
+			}
 		}
 	}
 }
@@ -168,10 +179,56 @@ static void process_raw_string (struct token *tht, size_t *aka_i, uint16_t *offs
 	}
 
 	*aka_i += dx;
-	*offset += (uint16_t) dx;
+	*offset += (uint16_t) dx + 1;
 
 	tht->meta.length = (uint16_t) dx + 1;
 	tht->type = TT_STRING;
 
 	printf("(%d %d): %.*s\n", tht->meta.numberline, tht->meta.offset, tht->meta.length - 2, tht->meta.context + 1);
+}
+
+static void process_raw_reference (struct token *tht, size_t *aka_i, uint16_t *offset, const enum token_type type)
+{
+	size_t dx = 1;
+	char *aux = tht->meta.context + 1;
+
+	if (!isalpha(*aux))   { goto get_row; }
+	while (isalpha(*aux)) { aux++; dx++; }
+
+	bool less25 = true;
+	aux--;
+
+	do {
+		if (less25 == true) tht->as.ref.col = tolower(*aux) - 'a' + 1;
+		else tht->as.ref.col += 26 * (tolower(*aux) - 'a' + 1);
+		aux--;
+
+		less25 = false;
+	} while (*aux != (char) type);
+
+	/* Subtract one from column since it starts counting from 1, we
+	 * want to start from 0
+	 */
+	tht->as.ref.col--;
+	aux += dx;
+
+get_row:
+	if (!isdigit(*aux)) { goto fini; }
+
+	char *ends;
+	tht->as.ref.row = (uint16_t) strtol(aux, &ends, 10);
+
+	dx += ends - aux;
+
+fini:
+	printf("(%d %d): (%d %d)\n", tht->meta.numberline, tht->meta.offset, tht->as.ref.row, tht->as.ref.col);
+
+	*aka_i += dx - 1;
+	*offset += (uint16_t) dx;
+	tht->type = type;
+}
+
+static void validate_reference ()
+{
+
 }

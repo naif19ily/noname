@@ -52,8 +52,8 @@ struct token
 		 * meta.context + 1 and the length of that string is going to
 		 * be meta.length - 1 (avoiding the quotes)
 		 */
-		long double  number;
-		struct cell *ref;
+		long double number;
+		struct      { struct cell *ref; uint16_t row, col; } ref;
 	} as;
 	
 	enum token_type type;
