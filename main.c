@@ -5,7 +5,8 @@
 static void usage (void);
 static void read_file (const char*, struct sheet*);
 
-static void process_sheet (struct sheet*);
+static void get_sheet_dimensions (struct sheet*);
+static void process_content (struct sheet*);
 
 int main (int argc, char **argv)
 {
@@ -14,11 +15,12 @@ int main (int argc, char **argv)
 	struct sheet sheet = {0};
 
 	read_file(argv[1], &sheet);
-	process_sheet(&sheet);
+	get_sheet_dimensions(&sheet);
 
 	sheet.grid = (struct cell*) calloc(sheet.rows * sheet.cols, sizeof(*sheet.grid));
 	CHECK_PTR(sheet.grid);
 
+	process_content(&sheet);
 	return 0;
 }
 
@@ -56,7 +58,7 @@ static void read_file (const char *filename, struct sheet *sheet)
 	fclose(file);
 }
 
-static void process_sheet (struct sheet *sheet)
+static void get_sheet_dimensions (struct sheet *sheet)
 {
 	bool instr = false;
 	uint16_t cols = 0;
@@ -85,4 +87,43 @@ static void process_sheet (struct sheet *sheet)
 		}
 	}
 	sheet->cols = MAX(sheet->cols, cols);
+}
+
+static void process_content (struct sheet *sheet)
+{
+	struct cell *thc = &sheet->grid[0];
+	uint16_t offset = 0, numberline = 1;
+
+	for (size_t i = 0; i < sheet->size; i++)
+	{
+		struct token *tht = &thc->stream[thc->nth_t];
+
+		/* Meta information is useful for error handling, see
+		 * an example in report_token function
+		 */
+		tht->meta.context    = sheet->source + i;
+		tht->meta.numberline = numberline;
+		tht->meta.offset     = offset;
+
+		switch (sheet->source[i])
+		{
+			case ' ': case '\t': { offset++; continue; }
+			case '|':            { thc++; offset++; continue; }
+			case '\n':           { thc = &sheet->grid[numberline++ * sheet->rows]; offset = 0; continue; }
+
+			case '0':
+			case '1':
+			case '2':
+			case '3':
+			case '4':
+			case '5':
+			case '6':
+			case '7':
+			case '8':
+			case '9':
+			{
+				break;
+			}
+		}
+	}
 }
