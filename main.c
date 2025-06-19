@@ -10,6 +10,7 @@ static void get_sheet_dimensions (struct sheet*);
 static void process_content (struct sheet*);
 
 static void process_raw_number (struct token*, size_t*, uint16_t*);
+static void process_raw_string (struct token*, size_t*, uint16_t*);
 
 int main (int argc, char **argv)
 {
@@ -128,6 +129,12 @@ static void process_content (struct sheet *sheet)
 				process_raw_number(tht, &i, &offset);
 				break;
 			}
+
+			case '"':
+			{
+				process_raw_string(tht, &i, &offset);
+				break;
+			}
 		}
 	}
 }
@@ -144,4 +151,27 @@ static void process_raw_number (struct token *tht, size_t *aka_i, uint16_t *offs
 
 	*aka_i  += dx - 1;
 	*offset += (uint16_t) dx;
+
+	printf("(%d %d): %Lf\n", tht->meta.numberline, tht->meta.offset, tht->as.number);
+}
+
+static void process_raw_string (struct token *tht, size_t *aka_i, uint16_t *offset)
+{
+	size_t dx = 1;
+
+	while (tht->meta.context[dx] != '"')
+	{
+		if (tht->meta.context[dx++] == 0)
+		{
+			/* TODO: inform */
+		}
+	}
+
+	*aka_i += dx;
+	*offset += (uint16_t) dx;
+
+	tht->meta.length = (uint16_t) dx + 1;
+	tht->type = TT_STRING;
+
+	printf("(%d %d): %.*s\n", tht->meta.numberline, tht->meta.offset, tht->meta.length - 2, tht->meta.context + 1);
 }

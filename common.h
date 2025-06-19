@@ -49,8 +49,8 @@ struct token
 	{
 		/* Since we do not have string methods, whenever a token
 		 * is a string, we can access its content by accessing
-		 * meta.context and the length of that string is going to
-		 * be meta.length - 2 (avoiding the quotes)
+		 * meta.context + 1 and the length of that string is going to
+		 * be meta.length - 1 (avoiding the quotes)
 		 */
 		long double  number;
 		struct cell *ref;
