@@ -41,7 +41,7 @@ enum cell_type
 {
 	CT_EMPTY  = 0,
 	CT_NUMBER = 1,
-	CT_STRING = 2,
+	CT_TEXT   = 2,
 	CT_ERROR  = 3,
 };
 

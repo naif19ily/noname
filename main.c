@@ -26,6 +26,7 @@ static bool process_raw_reference (struct token*, size_t*, uint16_t*, const enum
 static void set_cell_to_error (struct cell*, const enum cell_error_type);
 
 static void make_sense_of (struct sheet*);
+static void finally_print (struct sheet*);
 
 int main (int argc, char **argv)
 {
@@ -287,61 +288,52 @@ static void set_cell_to_error (struct cell *thc, const enum cell_error_type type
 
 static void make_sense_of (struct sheet *sheet)
 {
-	for (uint16_t i = 0; i < sheet->rows; i++)
+	uint16_t rvis = 0, cvis = 0, r_offset = 0;
+
+	while (rvis < sheet->rows)
 	{
-		const uint16_t rowoffset = i * sheet->rows;
-
-		for (uint16_t j  = 0; j < sheet->cols; j++)
+		if (cvis == sheet->cols)
 		{
-			struct cell *thc = &sheet->grid[rowoffset + j];
-			if (thc->type == CT_EMPTY) { continue; }
+			cvis = 0;
+			r_offset = ++rvis * sheet->rows;
+			continue;
+		}
 
-			struct token *tht = &thc->stream[0];
+		uint16_t *ccwidth = &sheet->widths[cvis], thw = 0;
 
-			switch (tht->type)
+		struct cell *thc = &sheet->grid[r_offset + cvis++];
+		if (thc->nth_t == 0) { continue; }
+
+		struct token *head = &thc->stream[0];
+		switch (head->type)
+		{
+			case TT_NUMBER:
+			{	
+				thc->as.number = head->as.number;
+				thc->type = CT_NUMBER;
+
+				thw = head->meta.length;
+				break;
+			}
+			case TT_STRING:
 			{
-				case TT_NUMBER:
-				{
-					thc->as.number = tht->as.number;
-					thc->type = CT_NUMBER;
-					break;
-				}
+				thc->as.text.text  = head->meta.context + 1;
+				thc->as.text.length = head->meta.length - 2;
 
-				case TT_STRING:
-				{				
-					thc->as.text.text  = tht->meta.context + 1;
-					thc->as.text.length = tht->meta.length - 2;
-					thc->type = CT_STRING;
-					break;
-				}
-
-				case TT_VARREF:
-				case TT_CTEREF:
-				{
-					break;
-				}
-
-				case TT_CLONE_UP:
-				case TT_CLONE_DN:
-				case TT_CLONE_LF:
-				case TT_CLONE_RT:
-				{
-					break;
-				}
-
-				case TT_EQ_SIGN:
-				{
-					break;
-				}
-
-				default:
-				{
-					set_cell_to_error(thc, CET_NSENSE);
-					break;
-				}
+				thc->type = CT_TEXT;
+				thw = thc->as.text.length;
+				break;
 			}
 		}
+
+
+		*ccwidth = MAX(*ccwidth, thw);
 	}
+}
+
+static void finally_print (struct sheet *sheet)
+{
+
 }
 
 // NEGATIVE NUMBERS
