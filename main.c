@@ -172,8 +172,19 @@ static void process_content (struct sheet *sheet)
 				break;
 			}
 
-			case '+':
 			case '-':
+			{
+				if (isdigit(sheet->source[i + 1])) { process_raw_number(tht, &i, &offset); break; }
+				else
+				{
+					tht->type = (enum token_type) ch;
+					tht->meta.length = 1;
+					offset++;
+					break;
+				}
+			}
+
+			case '+':
 			case '*':
 			case '/':
 			case '(':
@@ -369,6 +380,4 @@ static void finally_print (struct sheet *sheet)
 	}
 }
 
-// TODO
-// NEGATIVE NUMBERS
 // SPECIFIC NUMBER OF DECIMALS
