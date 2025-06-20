@@ -4,7 +4,7 @@
 # \__/\_, /___/ .__/
 #    /___/   /_/    
 
-objs = main.o
+objs = main.o cxa.o
 cxx = gcc
 avoid = -Wno-switch
 std = -std=c99

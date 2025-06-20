@@ -128,10 +128,10 @@ static void process_content (struct sheet *sheet)
 	{
 		const char ch = sheet->source[i];
 
-		if (ch == ' ' || ch == '\t') { offset++; continue; }
-		if (ch == '|')               { thc++; offset++; continue; }
-		if (ch == '\n')              { thc = &sheet->grid[numberline++ * sheet->rows]; offset = 0; continue; }
-		if (thc->type == CT_ERROR)   { offset++; continue; }
+		if (ch == '\n')            { thc = &sheet->grid[numberline++ * sheet->cols]; offset = 0; continue; }
+		if (ch == '|')             { thc++; offset++; continue; }
+		if (isspace(ch))           { offset++; continue; }
+		if (thc->type == CT_ERROR) { offset++; continue; }
 
 		struct token *tht = &thc->stream[thc->nth_t];
 
@@ -141,7 +141,6 @@ static void process_content (struct sheet *sheet)
 
 		switch (ch)
 		{
-
 			case '0':
 			case '1':
 			case '2':
@@ -175,13 +174,7 @@ static void process_content (struct sheet *sheet)
 			case '-':
 			{
 				if (isdigit(sheet->source[i + 1])) { process_raw_number(tht, &i, &offset); break; }
-				else
-				{
-					tht->type = (enum token_type) ch;
-					tht->meta.length = 1;
-					offset++;
-					break;
-				}
+				else   { tht->type = (enum token_type) ch; tht->meta.length = 1; offset++; break; }
 			}
 
 			case '+':
@@ -302,14 +295,14 @@ static void make_sense_of (struct sheet *sheet)
 {
 	uint16_t rvis = 0, cvis = 0, r_offset = 0;
 	struct cell *thc = &sheet->grid[0];
-
+	
 	while (rvis < sheet->rows)
 	{
 		if (cvis == sheet->cols)
 		{
 			thc->fin_col = true;
 			cvis = 0;
-			r_offset = ++rvis * sheet->rows;
+			r_offset = ++rvis * sheet->cols;
 			continue;
 		}
 
@@ -319,10 +312,12 @@ static void make_sense_of (struct sheet *sheet)
 		if (thc->nth_t == 0) { continue; }
 
 		struct token *head = &thc->stream[0];
+
 		switch (head->type)
 		{
 			case TT_NUMBER:
 			{	
+
 				thc->as.number = head->as.number;
 				thc->type = CT_NUMBER;
 
@@ -361,17 +356,17 @@ static void finally_print (struct sheet *sheet)
 		{
 			case CT_NUMBER:
 			{
-				printf("%*.1Lf ", width, thc->as.number);
+				printf("%*.1Lf  ", width, thc->as.number);
 				break;
 			}
 			case CT_TEXT:
 			{
-				printf("%-*.*s ", width, thc->as.text.length, thc->as.text.text);
+				printf("%-*.*s  ", width, thc->as.text.length, thc->as.text.text);
 				break;
 			}
 			case CT_EMPTY:
 			{
-				printf("%-*c ", width, ' ');
+				printf("%-*c  ", width, ' ');
 				break;
 			}
 		}
