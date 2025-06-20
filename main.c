@@ -8,8 +8,9 @@
 enum cell_error_type
 {
 	CET_BOUNDS = 0,      /* Reference given is out of table's bounds */
-	CET_INFSTR = 1,      /* String is not terminated */
-	CET_TOOTOK = 2,      /* Cell has more than MAXTOKCAP tokens*/
+	CET_INFSTR = 1,      /* String is not terminated                 */
+	CET_TOOTOK = 2,      /* Cell has more than MAXTOKCAP tokens      */
+	CET_NSENSE = 3,      /* Cell's content does not make sense       */
 };
 
 static void usage (void);
@@ -24,6 +25,8 @@ static bool process_raw_string (struct token*, size_t*, uint16_t*);
 static bool process_raw_reference (struct token*, size_t*, uint16_t*, const enum token_type, const uint16_t, const uint16_t);
 static void set_cell_to_error (struct cell*, const enum cell_error_type);
 
+static void make_sense_of (struct sheet*);
+
 int main (int argc, char **argv)
 {
 	if (argc == 1) { usage(); return 0; }
@@ -33,10 +36,19 @@ int main (int argc, char **argv)
 	read_file(argv[1], &sheet);
 	get_sheet_dimensions(&sheet);
 
-	sheet.grid = (struct cell*) calloc(sheet.rows * sheet.cols, sizeof(*sheet.grid));
+	/* Creating sheet structure */
+	sheet.ncells = sheet.rows * sheet.cols;
+	sheet.grid = (struct cell*) calloc(sheet.ncells, sizeof(*sheet.grid));
 	CHECK_PTR(sheet.grid);
 
+	/* Setting default width but all columns */
+	sheet.widths = (uint16_t*) calloc(sheet.cols, sizeof(*sheet.widths));	
+	CHECK_PTR(sheet.widths);
+	for (uint16_t i = 0; i < sheet.cols; i++) { sheet.widths[i] = DEFAULTWIDTH; }
+
 	process_content(&sheet);
+	make_sense_of(&sheet);
+
 	return 0;
 }
 
@@ -121,9 +133,6 @@ static void process_content (struct sheet *sheet)
 
 		struct token *tht = &thc->stream[thc->nth_t];
 
-		/* Meta information is useful for error handling, see
-		 * an example in report_token function
-		 */
 		tht->meta.context    = sheet->source + i;
 		tht->meta.numberline = numberline;
 		tht->meta.offset     = offset;
@@ -266,11 +275,73 @@ static void set_cell_to_error (struct cell *thc, const enum cell_error_type type
 	{
 		"BOUNDS!",
 		"INFSTR!",
-		"TOOTOK!"
+		"TOOTOK!",
+		"NSENSE!",
 	};
 
 	thc->as.text.text   = errors[type];
-	thc->as.text.length = strlen(errors[type]);
+	thc->as.text.length = 7;
 
 	thc->type = CT_ERROR;
 }
+
+static void make_sense_of (struct sheet *sheet)
+{
+	for (uint16_t i = 0; i < sheet->rows; i++)
+	{
+		const uint16_t rowoffset = i * sheet->rows;
+
+		for (uint16_t j  = 0; j < sheet->cols; j++)
+		{
+			struct cell *thc = &sheet->grid[rowoffset + j];
+			if (thc->type == CT_EMPTY) { continue; }
+
+			struct token *tht = &thc->stream[0];
+
+			switch (tht->type)
+			{
+				case TT_NUMBER:
+				{
+					thc->as.number = tht->as.number;
+					thc->type = CT_NUMBER;
+					break;
+				}
+
+				case TT_STRING:
+				{				
+					thc->as.text.text  = tht->meta.context + 1;
+					thc->as.text.length = tht->meta.length - 2;
+					thc->type = CT_STRING;
+					break;
+				}
+
+				case TT_VARREF:
+				case TT_CTEREF:
+				{
+					break;
+				}
+
+				case TT_CLONE_UP:
+				case TT_CLONE_DN:
+				case TT_CLONE_LF:
+				case TT_CLONE_RT:
+				{
+					break;
+				}
+
+				case TT_EQ_SIGN:
+				{
+					break;
+				}
+
+				default:
+				{
+					set_cell_to_error(thc, CET_NSENSE);
+					break;
+				}
+			}
+		}
+	}
+}
+
+// NEGATIVE NUMBERS

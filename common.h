@@ -15,6 +15,7 @@
 	} while (0)
 
 #define MAXTOKNCAP    64
+#define DEFAULTWIDTH  10
 
 enum token_type
 {
@@ -61,7 +62,7 @@ struct token
 		/* Since we do not have string methods, whenever a token
 		 * is a string, we can access its content by accessing
 		 * meta.context + 1 and the length of that string is going to
-		 * be meta.length - 1 (avoiding the quotes)
+		 * be meta.length - 2 (avoiding the quotes)
 		 */
 		long double number;
 		struct      { struct cell *ref; uint16_t row, col; } ref;
@@ -88,7 +89,8 @@ struct sheet
 	char        *filename;
 	char        *source;
 	size_t      size;
-	uint16_t    rows, cols;
+	uint16_t    rows, cols, ncells;
+	uint16_t    *widths;
 };
 
 #endif
