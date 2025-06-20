@@ -50,6 +50,7 @@ int main (int argc, char **argv)
 	process_content(&sheet);
 	make_sense_of(&sheet);
 
+	finally_print(&sheet);
 	return 0;
 }
 
@@ -289,11 +290,13 @@ static void set_cell_to_error (struct cell *thc, const enum cell_error_type type
 static void make_sense_of (struct sheet *sheet)
 {
 	uint16_t rvis = 0, cvis = 0, r_offset = 0;
+	struct cell *thc = &sheet->grid[0];
 
 	while (rvis < sheet->rows)
 	{
 		if (cvis == sheet->cols)
 		{
+			thc->fin_col = true;
 			cvis = 0;
 			r_offset = ++rvis * sheet->rows;
 			continue;
@@ -301,7 +304,7 @@ static void make_sense_of (struct sheet *sheet)
 
 		uint16_t *ccwidth = &sheet->widths[cvis], thw = 0;
 
-		struct cell *thc = &sheet->grid[r_offset + cvis++];
+		thc = &sheet->grid[r_offset + cvis++];
 		if (thc->nth_t == 0) { continue; }
 
 		struct token *head = &thc->stream[0];
@@ -324,16 +327,48 @@ static void make_sense_of (struct sheet *sheet)
 				thw = thc->as.text.length;
 				break;
 			}
+
+			default:
+			{
+
+			}
 		}
-
-
 		*ccwidth = MAX(*ccwidth, thw);
 	}
 }
 
 static void finally_print (struct sheet *sheet)
 {
+	uint16_t nthcol = 0;
 
+	for (uint16_t i = 0; i < sheet->ncells; i++)
+	{
+		struct cell *thc = &sheet->grid[i];
+		const uint16_t width = sheet->widths[nthcol++];
+
+		switch (thc->type)
+		{
+			case CT_NUMBER:
+			{
+				printf("%*.1Lf ", width, thc->as.number);
+				break;
+			}
+			case CT_TEXT:
+			{
+				printf("%-*.*s ", width, thc->as.text.length, thc->as.text.text);
+				break;
+			}
+			case CT_EMPTY:
+			{
+				printf("%-*c ", width, ' ');
+				break;
+			}
+		}
+
+		if (thc->fin_col == true) { putchar('\n'); nthcol = 0; }
+	}
 }
 
+// TODO
 // NEGATIVE NUMBERS
+// SPECIFIC NUMBER OF DECIMALS

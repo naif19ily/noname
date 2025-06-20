@@ -81,6 +81,7 @@ struct cell
 	} as;
 	uint16_t       nth_t;
 	enum cell_type type;
+	bool           fin_col;
 };
 
 struct sheet
