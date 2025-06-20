@@ -14,15 +14,26 @@
 		}                                                                          \
 	} while (0)
 
-#define MAXTOKNCAP    32
+#define MAXTOKNCAP    64
 
 enum token_type
 {
-	TT_UNKNOWN = -1,
-	TT_NUMBER  = 0,
-	TT_STRING  = '"',
-	TT_CTEREF  = '@',
-	TT_VARREF  = '$',
+	TT_UNKNOWN  = -1,
+	TT_NUMBER   = 0,
+	TT_STRING   = '"',
+	TT_CTEREF   = '@',
+	TT_VARREF   = '$',
+	TT_ADD_OP   = '+',
+	TT_SUB_OP   = '-',
+	TT_MUL_OP   = '*',
+	TT_DIV_OP   = '/',
+	TT_LFT_PAR  = '(',
+	TT_RGT_PAR  = ')',
+	TT_EQ_SIGN  = '=',
+	TT_CLONE_UP = '^',
+	TT_CLONE_DN = 'v',
+	TT_CLONE_LF = '<',
+	TT_CLONE_RT = '>',
 };
 
 enum cell_type
@@ -62,8 +73,13 @@ struct token
 struct cell
 {
 	struct token   stream[MAXTOKNCAP];
-	enum cell_type type;
+	union
+	{
+		struct      { const char *text; uint16_t length; } text;
+		long double number;
+	} as;
 	uint16_t       nth_t;
+	enum cell_type type;
 };
 
 struct sheet

@@ -21,4 +21,4 @@ $(name): $(objs)
 	$(cxx)	-c $< $(flags)
 
 clean:
-	rm	-rf $(objs) *~ $(name)
+	rm	-rf $(objs) *~ $(name) && clear

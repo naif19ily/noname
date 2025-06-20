@@ -1,8 +1,16 @@
 #include "common.h"
 #include <errno.h>
 #include <ctype.h>
+#include <string.h>
 
 #define MAX(a, b)    ((a) > (b) ? (a) : (b))
+
+enum cell_error_type
+{
+	CET_BOUNDS = 0,      /* Reference given is out of table's bounds */
+	CET_INFSTR = 1,      /* String is not terminated */
+	CET_TOOTOK = 2,      /* Cell has more than MAXTOKCAP tokens*/
+};
 
 static void usage (void);
 static void read_file (const char*, struct sheet*);
@@ -11,10 +19,10 @@ static void get_sheet_dimensions (struct sheet*);
 static void process_content (struct sheet*);
 
 static void process_raw_number (struct token*, size_t*, uint16_t*);
-static void process_raw_string (struct token*, size_t*, uint16_t*);
+static bool process_raw_string (struct token*, size_t*, uint16_t*);
 
-static void process_raw_reference (struct token*, size_t*, uint16_t*, const enum token_type);
-static void validate_reference ();
+static bool process_raw_reference (struct token*, size_t*, uint16_t*, const enum token_type, const uint16_t, const uint16_t);
+static void set_cell_to_error (struct cell*, const enum cell_error_type);
 
 int main (int argc, char **argv)
 {
@@ -104,6 +112,13 @@ static void process_content (struct sheet *sheet)
 
 	for (size_t i = 0; i < sheet->size; i++)
 	{
+		const char ch = sheet->source[i];
+
+		if (ch == ' ' || ch == '\t') { offset++; continue; }
+		if (ch == '|')               { thc++; offset++; continue; }
+		if (ch == '\n')              { thc = &sheet->grid[numberline++ * sheet->rows]; offset = 0; continue; }
+		if (thc->type == CT_ERROR)   { offset++; continue; }
+
 		struct token *tht = &thc->stream[thc->nth_t];
 
 		/* Meta information is useful for error handling, see
@@ -113,11 +128,8 @@ static void process_content (struct sheet *sheet)
 		tht->meta.numberline = numberline;
 		tht->meta.offset     = offset;
 
-		switch (sheet->source[i])
+		switch (ch)
 		{
-			case ' ': case '\t': { offset++; continue; }
-			case '|':            { thc++; offset++; continue; }
-			case '\n':           { thc = &sheet->grid[numberline++ * sheet->rows]; offset = 0; continue; }
 
 			case '0':
 			case '1':
@@ -136,17 +148,39 @@ static void process_content (struct sheet *sheet)
 
 			case '"':
 			{
-				process_raw_string(tht, &i, &offset);
+				const bool success = process_raw_string(tht, &i, &offset);
+				if (success == false) { set_cell_to_error(thc, CET_INFSTR); }
 				break;
 			}
 
 			case '@':
 			case '$':
 			{
-				process_raw_reference(tht, &i, &offset, (enum token_type) sheet->source[i]);
+				const bool success = process_raw_reference(tht, &i, &offset, (enum token_type) sheet->source[i], sheet->rows, sheet->cols);
+				if (success == false) { set_cell_to_error(thc, CET_BOUNDS); }
+				break;
+			}
+
+			case '+':
+			case '-':
+			case '*':
+			case '/':
+			case '(':
+			case ')':
+			case '=':
+			case '^':
+			case 'v':
+			case '<':
+			case '>':
+			{
+				tht->type = (enum token_type) ch;
+				tht->meta.length = 1;
+				offset++;
 				break;
 			}
 		}
+
+		if (++thc->nth_t == MAXTOKNCAP) { set_cell_to_error(thc, CET_TOOTOK); }
 	}
 }
 
@@ -162,11 +196,9 @@ static void process_raw_number (struct token *tht, size_t *aka_i, uint16_t *offs
 
 	*aka_i  += dx - 1;
 	*offset += (uint16_t) dx;
-
-	printf("(%d %d): %Lf\n", tht->meta.numberline, tht->meta.offset, tht->as.number);
 }
 
-static void process_raw_string (struct token *tht, size_t *aka_i, uint16_t *offset)
+static bool process_raw_string (struct token *tht, size_t *aka_i, uint16_t *offset)
 {
 	size_t dx = 1;
 
@@ -174,7 +206,7 @@ static void process_raw_string (struct token *tht, size_t *aka_i, uint16_t *offs
 	{
 		if (tht->meta.context[dx++] == 0)
 		{
-			/* TODO: inform */
+			return false;
 		}
 	}
 
@@ -184,10 +216,10 @@ static void process_raw_string (struct token *tht, size_t *aka_i, uint16_t *offs
 	tht->meta.length = (uint16_t) dx + 1;
 	tht->type = TT_STRING;
 
-	printf("(%d %d): %.*s\n", tht->meta.numberline, tht->meta.offset, tht->meta.length - 2, tht->meta.context + 1);
+	return true;
 }
 
-static void process_raw_reference (struct token *tht, size_t *aka_i, uint16_t *offset, const enum token_type type)
+static bool process_raw_reference (struct token *tht, size_t *aka_i, uint16_t *offset, const enum token_type type, const uint16_t rows, const uint16_t cols)
 {
 	size_t dx = 1;
 	char *aux = tht->meta.context + 1;
@@ -221,14 +253,24 @@ get_row:
 	dx += ends - aux;
 
 fini:
-	printf("(%d %d): (%d %d)\n", tht->meta.numberline, tht->meta.offset, tht->as.ref.row, tht->as.ref.col);
-
 	*aka_i += dx - 1;
 	*offset += (uint16_t) dx;
 	tht->type = type;
+
+	return ((tht->as.ref.row < rows) && (tht->as.ref.col < cols));
 }
 
-static void validate_reference ()
+static void set_cell_to_error (struct cell *thc, const enum cell_error_type type)
 {
+	static const char *const errors[] =
+	{
+		"BOUNDS!",
+		"INFSTR!",
+		"TOOTOK!"
+	};
 
+	thc->as.text.text   = errors[type];
+	thc->as.text.length = strlen(errors[type]);
+
+	thc->type = CT_ERROR;
 }
